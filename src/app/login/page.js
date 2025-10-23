@@ -1,89 +1,100 @@
-"use client"
-import { loginSchema } from "@/lib/zodSchemas";
+"use client";
+
+import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { useState } from "react";
+import { loginSchema } from "@/lib/zodSchemas";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
-  const [generalError, setGeneralError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+  const { user, login } = useAuth();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
+    setErrors({ ...errors, [e.target.name]: "" }); // clear individual field error
   };
+
+  // ✅ Redirect if already logged in
+  useEffect(() => {
+    if (user){
+     router.replace("/dashboard");  
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setGeneralError("");
 
-    // Validate form
+    // Step 1: Validate with Zod
     const parsed = loginSchema.safeParse(form);
+
     if (!parsed.success) {
+      // Extract errors in a friendly way
       const fieldErrors = {};
-      parsed.error.issues.forEach(issue => {
-        const field = issue.path[0];
-        fieldErrors[field] = issue.message;
+      parsed.error.issues.forEach((issue) => {
+        fieldErrors[issue.path[0]] = issue.message;
       });
       setErrors(fieldErrors);
-      return;
+      return; // Stop submission if validation fails
     }
 
+    // Step 2: Proceed with login API
+    setLoading(true);
     try {
-        console.log(form);
-        
-      const res = await api.post("api/auth/login", form);
-
-      console.log(res.data);
-      
-      const { user, accessToken } = res.data;
-
-      console.log("res", res);
-      
-      // store token
-      localStorage.setItem("accessToken", accessToken);
-
-      // redirect to dashboard
+      const res = await login(form.email, form.password);
+      console.log("Login success:", res.data);
+      // You can store user in context here
+      // redirect to dashboard, etc.
       router.push("/dashboard");
     } catch (err) {
-    //   console.error(err);
-      setGeneralError(err.response?.data?.message || "Login failed");
+      if (err.response?.status === 401) {
+        setErrors({ password: "Invalid email or password" });
+      } else {
+        console.error("Login failed:", err);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-20 p-4 border rounded">
-      <h1 className="text-xl mb-4">Login</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <input
-            type="email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            placeholder="Email"
-            className="w-full border p-2"
-          />
-          {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
-        </div>
-        <div>
-          <input
-            type="password"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-            placeholder="Password"
-            className="w-full border p-2"
-          />
-          {errors.password && <p className="text-red-500 text-sm">{errors.password}</p>}
-        </div>
-        {generalError && <p className="text-red-500">{generalError}</p>}
-        <button type="submit" className="bg-blue-500 text-white p-2 rounded">
-          Login
-        </button>
-      </form>
-    </div>
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto p-6">
+      <div>
+        <label className="block text-sm font-medium">Email</label>
+        <input
+          type="email"
+          name="email"
+          value={form.email}
+          onChange={handleChange}
+          className="w-full border rounded p-2"
+        />
+        {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium">Password</label>
+        <input
+          type="password"
+          name="password"
+          value={form.password}
+          onChange={handleChange}
+          className="w-full border rounded p-2"
+        />
+        {errors.password && (
+          <p className="text-red-500 text-sm">{errors.password}</p>
+        )}
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="bg-blue-600 text-white px-4 py-2 rounded w-full"
+      >
+        {loading ? "Logging in..." : "Login"}
+      </button>
+    </form>
   );
 }
