@@ -12,14 +12,14 @@ const AuthContext = createContext();
 export function AuthProvider({ children }) {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Load user on mount (CSR)
   useEffect(() => {
     async function loadUser() {
 
       try {
-        // setLoading(true)
+        // setAuthLoading(true)
         const res = await api.get("/auth/me")
         setUser(res.data.user);
         console.log(res);
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
         // console.error("Failed to load user:", err);
         setUser(null);
       } finally {
-        setLoading(false);
+        setAuthLoading(false);
       }
     }
 
@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, hasPermission, hasRole }}
+      value={{ user,setUser, authLoading, login, logout, hasPermission, hasRole }}
     >
       {children}
     </AuthContext.Provider>

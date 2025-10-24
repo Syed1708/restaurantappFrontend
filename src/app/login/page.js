@@ -5,13 +5,16 @@ import api from "@/lib/api";
 import { loginSchema } from "@/lib/zodSchemas";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { user, login } = useAuth();
+  const { user,authLoading, login } = useAuth();
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -19,11 +22,18 @@ export default function LoginPage() {
   };
 
   // ✅ Redirect if already logged in
+
+
   useEffect(() => {
-    if (user){
-     router.replace("/dashboard");  
+    if (!authLoading && user) {
+      if (user.role === "admin") router.replace("/dashboard/admin");
+      else if (user.role === "manager") router.replace("/dashboard/manager");
+      else if (user.role === "waiter") router.replace("/dashboard/waiter");
+      else if (user.role === "chef") router.replace("/dashboard/chef");
+      else router.replace("/dashboard");
     }
-  }, [user, router]);
+}, [user, router, authLoading]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,57 +54,78 @@ export default function LoginPage() {
     // Step 2: Proceed with login API
     setLoading(true);
     try {
-      const res = await login(form.email, form.password);
-      console.log("Login success:", res.data);
-      // You can store user in context here
-      // redirect to dashboard, etc.
-      router.push("/dashboard");
+    const res = await login(form.email, form.password); // call login from context
+
+    
     } catch (err) {
-      if (err.response?.status === 401) {
-        setErrors({ password: "Invalid email or password" });
-      } else {
-        console.error("Login failed:", err);
-      }
+     
+      setErrors(err)
+    
     } finally {
       setLoading(false);
     }
   };
 
+    if (authLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Checking session...</p>
+      </div>
+    );
+  }
+
+  if (user) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Redirecting...</p>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto p-6">
-      <div>
-        <label className="block text-sm font-medium">Email</label>
-        <input
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <form onSubmit={handleSubmit} className="bg-white p-6 rounded-2xl shadow-md w-96 space-y-4">
+      {errors.message && (
+        <p className="text-red-600 text-sm font-medium">{errors.message}</p>
+      )}
+
+      <div className="space-y-1">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
           type="email"
           name="email"
           value={form.email}
           onChange={handleChange}
-          className="w-full border rounded p-2"
+          placeholder="you@example.com"
+          className="w-full"
         />
-        {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
+        {errors.email && (
+          <p className="text-red-600 text-sm">{errors.email}</p>
+        )}
       </div>
 
-      <div>
-        <label className="block text-sm font-medium">Password</label>
-        <input
+      <div className="space-y-1">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
           type="password"
           name="password"
           value={form.password}
           onChange={handleChange}
-          className="w-full border rounded p-2"
+          placeholder="••••••••"
+          className="w-full"
         />
         {errors.password && (
-          <p className="text-red-500 text-sm">{errors.password}</p>
+          <p className="text-red-600 text-sm">{errors.password}</p>
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={loading}
-        className="bg-blue-600 text-white px-4 py-2 rounded w-full"
-      >
+      <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Logging in..." : "Login"}
-      </button>
+      </Button>
     </form>
+
+    </div>
   );
 }
