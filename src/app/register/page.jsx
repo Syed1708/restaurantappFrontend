@@ -9,9 +9,9 @@ import { registerSchema } from "@/lib/zodSchemas";
 const schema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Invalid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(4, "Password must be at least 6 characters"),
   role: z.enum(["admin", "manager", "chef", "waiter"]),
-  location: z.string().min(1, "Location is required"),
+  locations: z.array(z.string()).min(1, "Select at least one location"),
 });
 
 export default function RegisterPage() {
@@ -21,23 +21,18 @@ export default function RegisterPage() {
     email: "",
     password: "",
     role: "waiter",
-    location: "",
+    locations: [], // array for multi-select
   });
-  const [errors, setErrors] = useState("");
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [allLocations, setAllLocations] = useState([]);
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
-  };
-
-    const [locations, setLocations] = useState([]);
-
+  // Fetch locations for dropdown
   useEffect(() => {
     async function fetchLocations() {
       try {
         const res = await api.get("/locations");
-        setLocations(res.data);
+        setAllLocations(res.data); // [{ _id, name }]
       } catch (err) {
         console.error("Failed to load locations", err);
       }
@@ -45,33 +40,46 @@ export default function RegisterPage() {
     fetchLocations();
   }, []);
 
+  const handleChange = (e) => {
+    const { name, value, selectedOptions, type } = e.target;
+
+    if (type === "select-multiple") {
+      // Multi-select: convert selected options to array of IDs
+      const values = Array.from(selectedOptions).map((opt) => opt.value);
+      setForm({ ...form, [name]: values });
+      setErrors({ ...errors, [name]: "" });
+    } else {
+      setForm({ ...form, [name]: value });
+      setErrors({ ...errors, [name]: "" });
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Step 1: Validate with Zod
-    const parsed = registerSchema.safeParse(form);
-
+    // Validate with Zod
+    const parsed = schema.safeParse(form);
     if (!parsed.success) {
-      // Extract errors in a friendly way
       const fieldErrors = {};
       parsed.error.issues.forEach((issue) => {
         fieldErrors[issue.path[0]] = issue.message;
       });
       setErrors(fieldErrors);
-      return; // Stop submission if validation fails
+      return;
     }
 
-    // Step 2: Proceed with login API
     setLoading(true);
     try {
-      const res = await api.post("/auth/register", form);
-      console.log("register success:", res.data);
-      // You can store user in context here
-      // redirect to dashboard, etc.
+      const payload = {
+        ...form,
+        // locations is already an array
+      };
+
+      const res = await api.post("/auth/register", payload);
+      console.log("Register success:", res.data);
       router.push("/login");
     } catch (err) {
-        console.error("Registration failed:", err.response?.data || err.message);
-
+      console.error("Registration failed:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -93,6 +101,7 @@ export default function RegisterPage() {
           className="w-full border p-2 rounded"
         />
         {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
+
         <input
           name="email"
           value={form.email}
@@ -102,6 +111,7 @@ export default function RegisterPage() {
           className="w-full border p-2 rounded"
         />
         {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
+
         <input
           name="password"
           value={form.password}
@@ -126,23 +136,24 @@ export default function RegisterPage() {
           <option value="waiter">Waiter</option>
         </select>
 
-        {/* ✅ Location Dropdown */}
+        {/* Multi-branch dropdown */}
         <select
-          name="location"
-          className="w-full border p-2 rounded"
+          name="locations"
+          multiple
+          value={form.locations}
           onChange={handleChange}
-          value={form.location}
+          className="w-full border p-2 rounded h-32"
         >
-          <option value="">Select Location</option>
-          {locations.map((loc) => (
+          {allLocations.map((loc) => (
             <option key={loc._id} value={loc._id}>
               {loc.name}
             </option>
           ))}
         </select>
-        {errors.location && (
-          <p className="text-red-500 text-sm">{errors.location}</p>
+        {errors.locations && (
+          <p className="text-red-500 text-sm">{errors.locations}</p>
         )}
+
         <button
           type="submit"
           disabled={loading}
